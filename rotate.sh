@@ -91,21 +91,13 @@ OUTPUT=$(az rest --method GET --uri "https://management.azure.com${GATEWAY_RESOU
 }
 echo "done."
 
-echo -n "Determining which key is currently in use..."
-TAG_NAME="${APIM_GATEWAY,,}-current-key"
-CURRENT_KEY_TAG=$(az tag list --resource-id "${GATEWAY_RESOURCE_ID}" --query "properties.tags.\"${TAG_NAME}\"" -o tsv 2>&1) || {
-  echo -e "\n\nERROR: Unable to determine ${TAG_NAME} tag."
-  echo -n "\nCommand output:\n${CURRENT_KEY_TAG}"
-  exit 1
-}
-CURRENT_KEY=${CURRENT_KEY_TAG:-primary}
-echo "done - current key is ${CURRENT_KEY}."
-
 echo -n "Validating Kubernetes secret is present and correct..."
-OUTPUT=$(kubectl --namespace $NAMESPACE get secret $TOKEN_SECRET 2>&1) || {
+LAST_USED_KEY_ANNOTATION=$(kubectl --namespace $NAMESPACE get secret $TOKEN_SECRET -o jsonpath='{.metadata.annotations.last-used-key}' 2>&1) || {
   echo -e "\n\nERROR: unable to retrieve Kubernetes secret ${TOKEN_SECRET}."
-  echo -e "\nkubectl output:\n${OUTPUT}"
+  echo -e "\nkubectl output:\n${LAST_USED_KEY_ANNOTATION}"
 }
-echo "done."
+LAST_USED_KEY=${LAST_USED_KEY_ANNOTATION:-primary}
+echo "done - last key used was ${LAST_USED_KEY}."
+
 
 echo

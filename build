@@ -3,4 +3,4 @@ TAG=latest
 IMAGE=$NAME:$TAG
 
 docker build -t $IMAGE .
-docker run -it -v /home/pahealy/dev/apim-shg-rotate:/root $IMAGE /bin/bash
+docker run -it -v /home/pahealy/dev/apim-shg-rotate:/root $IMAGE "$@"
