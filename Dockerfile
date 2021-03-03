@@ -5,4 +5,4 @@ RUN /usr/local/bin/az aks install-cli
 
 COPY updateToken.sh /root
 
-ENTRYPOINT "/root/rotate.sh"
+ENTRYPOINT "/root/updateToken.sh"

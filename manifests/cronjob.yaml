@@ -1,0 +1,42 @@
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: apim-shg-rotate
+spec:
+  concurrencyPolicy: Forbid
+  schedule: "5 2 * * SUN"
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      completions: 1
+      parallelism: 1
+      template:
+        metadata:
+          labels:
+            aadpodidbinding: apim-shg-rotate
+        spec:
+          containers:
+            - name: update-token
+              image: phealy/apim-shg-rotate:latest
+              imagePullPolicy: Always
+              env:
+                - name: SUBSCRIPTION_ID
+                  value: <SUBSCRIPTION_ID>
+                - name: RESOURCE_GROUP
+                  value: <RESOURCE_GROUP>
+                - name: APIM_INSTANCE
+                  value: <APIM_INSTANCE_NAME>
+                - name: APIM_GATEWAY
+                  value: <APIM_GATEWAY>
+                - name: NAMESPACE
+                  value: <APIM_SHG_NAMESPACE>
+                - name: TOKEN_SECRET
+                  value: <APIM_TOKEN_SECRET>
+                - name: TOKEN_KEY
+                  value: <APIM_TOKEN_KEY>
+                - name: K8S_OBJECT
+                  value: <APIM_SHG_OBJECT>
+          restartPolicy: Never
+          serviceAccountName: apim-shg-rotate
+          automountServiceAccountToken: true

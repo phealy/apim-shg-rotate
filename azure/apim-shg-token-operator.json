@@ -1,0 +1,11 @@
+{
+  "Name": "API Management Self-Hosted Gateway Token Operator",
+  "IsCustom": true,
+  "Description": "Can retrieve APIM Self-Hosted Gateways and generate new access tokens for them.",
+  "AssignableScopes": ["/subscriptions/<SUBSCRIPTION_ID>"],
+  "Actions": [
+    "Microsoft.ApiManagement/service/gateways/read",
+    "Microsoft.ApiManagement/service/gateways/generateToken/action"
+  ],
+  "NotActions": []
+}

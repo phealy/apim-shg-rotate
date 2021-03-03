@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: apim-shg-rotate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: apim-shg-rotate
+rules:
+  - apiGroups: ["*"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["*"]
+    resources: ["secrets"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["*"]
+    resources: ["statefulsets"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: apim-shg-rotate
+subjects:
+  - kind: ServiceAccount
+    name: apim-shg-rotate
+roleRef:
+  kind: Role
+  name: apim-shg-rotate
+  apiGroup: rbac.authorization.k8s.io

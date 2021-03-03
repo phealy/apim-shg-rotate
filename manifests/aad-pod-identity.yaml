@@ -1,0 +1,17 @@
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentity
+metadata:
+  name: apim-shg-rotate
+spec:
+  type: 0
+  resourceID: /subscriptions/SUBSCRIPTION_ID/resourceGroups/RESOURCE_GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/<MANAGED_IDENTITY_NAME>
+  clientID: <MANAGED_IDENTITY_CLIENT_ID>
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentityBinding
+metadata:
+  name: apim-shg-rotate
+spec:
+  azureIdentity: apim-shg-rotate
+  selector: apim-shg-rotate
