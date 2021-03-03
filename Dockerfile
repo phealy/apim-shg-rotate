@@ -3,6 +3,6 @@ WORKDIR /root
 
 RUN /usr/local/bin/az aks install-cli
 
-COPY rotate.sh /root
+COPY updateToken.sh /root
 
 ENTRYPOINT "/root/rotate.sh"

@@ -1,6 +1,5 @@
-NAME=pahealy.azurecr.io/apim-shg-rotate
+NAME=phealy/apim-shg-rotate
 TAG=latest
 IMAGE=$NAME:$TAG
 
 docker build -t $IMAGE .
-docker run -it -v /home/pahealy/dev/apim-shg-rotate:/root $IMAGE "$@"
