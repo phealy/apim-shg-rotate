@@ -17,11 +17,12 @@ function usage {
 	  -s|--subscription-id <SUBSCRIPTION_ID>
 	  -r|--resource-group <RESOURCE_GROUP>
 	  -a|--apim-instance <APIM_INSTANCE>
-	  -g|--gateway-name <APIM_GATEWAY>
+	  -g|--apim-gateway <APIM_GATEWAY>
 	  -n|--namespace <NAMESPACE>
 	  -t|--token-secret <TOKEN_SECRET>
 	  -k|--token-key <TOKEN_KEY>
-	  -o|--object <K8S_OBJECT>
+	  -o|--k8s-object <K8S_OBJECT>
+    --debug
 
 	Generates a new token for an APIM self-hosted gateway, updates the Kubernetes secret, then performs a rolling restart.
 	Arguments may be specified as parameters or as environment variables.
@@ -36,7 +37,7 @@ function usage {
 	-a, --apim-instance, APIM_INSTANCE environment variable
 	      The name of the APIM instance
 
-	-g, --gateway-name, APIM_GATEWAY environment variable
+	-g, --apim-gateway, APIM_GATEWAY environment variable
 	      The name of the self-hosted gateway
 
 	-n, --namespace, NAMESPACE environment variable
@@ -53,15 +54,18 @@ function usage {
 	        "primary" - generate the new token from the primary key
 	        "secondary - generate the new token from the secondary key
 
-	-o, --object, K8S_OBJECT
+	-o, --k8s-object, K8S_OBJECT
 	      The name of the Kubernetes object to restart after updating the secret, using kubectl rollout restart.
 	      Should be specified in the form "type/name", e.g. "deployment/apim-gateway" or "statefulset/apim-gateway"
+
+  --debug
+        Enable debug logging (set -x)
 
 	EOF
   exit 1
 }
 
-PARSED_ARGUMENTS=$(getopt -a -n "$(basename $0)" -o s:r:a:g:n:t:k:h --long subscription-id:,resource-group:,apim-instance:,gateway-name:,namespace:,token-secret:,token-key:,help -- "$@")
+PARSED_ARGUMENTS=$(getopt -a -n "$(basename $0)" -o s:r:a:g:n:t:k:o:h --long subscription-id:,resource-group:,apim-instance:,apim-gateway:,namespace:,token-secret:,token-key:,k8s-object:,debug,help -- "$@")
 VALID_ARGUMENTS=$?
 if [ "$VALID_ARGUMENTS" != "0" ]; then
   usage
@@ -71,16 +75,18 @@ eval set -- "$PARSED_ARGUMENTS"
 while :
 do
   case "$1" in
+    --debug) set -x; shift;;
     -s | --subscription-id) SUBSCRIPTION_ID="${2}"; shift 2;;
     -r | --resource-group) RESOURCE_GROUP="${2}"; shift 2;;
-    -a | --apim-name) APIM_INSTANCE="${2}"; shift 2;;
-    -g | --gateway-name) APIM_GATEWAY="${2}"; shift 2;;
+    -a | --apim-instance) APIM_INSTANCE="${2}"; shift 2;;
+    -g | --apim-gateway) APIM_GATEWAY="${2}"; shift 2;;
     -n | --namespace) NAMESPACE="${2}"; shift 2;;
     -t | --token-secret) TOKEN_SECRET="${2}"; shift 2;;
     -k | --token-key) TOKEN_KEY="${2}"; shift 2;;
-    -o | --object) K8S_OBJECT="${2}"; shift 2;;
+    -o | --k8s-object) K8S_OBJECT="${2}"; shift 2;;
     -h | --help) usage;;
     --) shift; break ;;
+    *) echo "ERROR: didn't parse an argument properly: ${1} ${2}"; usage;;
   esac
 done
 
