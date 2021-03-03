@@ -57,7 +57,7 @@ Arguments:
                  if no annotation is present, defaults to primary
         "rotate" - rotate from the last used key to the other key: primary -> secondary or secondary -> primary
         "primary" - generate the new token from the primary key
-        "secondary - generate the new token from the secondary key
+        "secondary" - generate the new token from the secondary key
 
 -o, --k8s-object, K8S_OBJECT
       The name of the Kubernetes object to restart after updating the secret, using kubectl rollout restart.
