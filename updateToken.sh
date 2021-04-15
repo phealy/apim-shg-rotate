@@ -1,5 +1,5 @@
 #! /bin/bash
-set -euo pipefail
+set -eo pipefail
 
 # updateToken.sh
 # 
@@ -20,8 +20,11 @@ function usage {
 	  -g|--apim-gateway <APIM_GATEWAY>
 	  -n|--namespace <NAMESPACE>
 	  -t|--token-secret <TOKEN_SECRET>
-	  -k|--token-key <TOKEN_KEY>
+	  -k|--token-key <TOKEN_KEY: last, rotate, primary, secondary>
 	  -o|--k8s-object <K8S_OBJECT>
+    -l|--login-method <LOGIN_METHOD: azurecli, identity, sp>
+    -c|--client-id <SP_ID>
+    -p|--client-secret <SP_SECRET>
 	  --debug
 
 	Generates a new token for an APIM self-hosted gateway, updates the Kubernetes secret, then performs a rolling restart.
@@ -58,6 +61,22 @@ function usage {
 	        The name of the Kubernetes object to restart after updating the secret, using kubectl rollout restart.
 	        Should be specified in the form "type/name", e.g. "deployment/apim-gateway" or "statefulset/apim-gateway"
 
+    -l, --login-method, LOGIN_METHOD
+          The login method to use:
+            "azurecli" - assumes azure CLI is present and already logged in
+            "identity" - log in using a managed identity on an Azure resource
+            "sp" - log in using a service principal and secret
+
+    --client-id, SP_ID
+          The client ID of the service principal to use, if the login method is "sp"
+
+    --client-secret, SP_SECRET
+          The client secret of the service principal to use, if the login method is "sp". This can be either a
+          secret or the path to a certificate.
+
+    --tenant, TENANT_ID
+          The tenant ID of the service principal to use, if the login method is "sp".
+
 	  --debug
 	        Enable debug logging (set -x)
 
@@ -65,7 +84,15 @@ function usage {
 	exit 1
 }
 
-PARSED_ARGUMENTS=$(getopt -a -n "$(basename $0)" -o s:r:a:g:n:t:k:o:h --long subscription-id:,resource-group:,apim-instance:,apim-gateway:,namespace:,token-secret:,token-key:,k8s-object:,debug,help -- "$@")
+# For identity or SP login, we make a temporary directory. Clean it up on exit.
+function cleanup {
+  [[ ! -z "${MY_AZURE_CONFIG_DIR}" ]] && {
+    rm -rf "${MY_AZURE_CONFIG_DIR}"
+  }
+}
+trap cleanup EXIT
+
+PARSED_ARGUMENTS=$(getopt -a -n "$(basename $0)" -o s:r:a:g:n:t:k:o:l:h --long subscription-id:,resource-group:,apim-instance:,apim-gateway:,namespace:,token-secret:,token-key:,k8s-object:,login-method:,client-id:,client-secret:,tenant:,debug,help -- "$@")
 VALID_ARGUMENTS=$?
 if [ "$VALID_ARGUMENTS" != "0" ]; then
 	usage
@@ -84,6 +111,10 @@ do
 	  -t | --token-secret) TOKEN_SECRET="${2}"; shift 2;;
 	  -k | --token-key) TOKEN_KEY="${2}"; shift 2;;
 	  -o | --k8s-object) K8S_OBJECT="${2}"; shift 2;;
+    -l | --login-method) LOGIN_METHOD="${2}"; shift 2;;
+    --client-id) SP_ID="${2}"; shift 2;;
+    --client-secret) SP_SECRET="${2}"; shift 2;;
+    --tenant) TENANT="${2}"; shift 2;;
 	  -h | --help) usage;;
 	  --) shift; break ;;
 	  *) echo "ERROR: didn't parse an argument properly: ${1} ${2}"; usage;;
@@ -92,14 +123,20 @@ done
 
 # Set defaults
 TOKEN_KEY="${TOKEN_KEY:-last}"
+LOGIN_METHOD="${LOGIN_METHOD:-identity}"
+MASKED_SP_SECRET="${SP_SECRET//?/*}"
 
 # Error out if variables aren't set
-for var in SUBSCRIPTION_ID RESOURCE_GROUP APIM_INSTANCE APIM_GATEWAY NAMESPACE TOKEN_SECRET TOKEN_KEY; do
+for var in SUBSCRIPTION_ID RESOURCE_GROUP APIM_INSTANCE APIM_GATEWAY NAMESPACE TOKEN_SECRET; do
 	if [[ -z "${!var}" ]]; then
-	  echo -e "\nERROR: Parameter ${var} is undefined. Please specify the parameter as either an environment variable or a command argument."
-	  usage
+    FAIL=1
+	  echo -e "ERROR: Parameter ${var} is undefined. Please specify the parameter as either an environment variable or a command argument."
 	fi
 done
+if [[ "${FAIL:-0}" == "1" ]]; then
+  echo -e "\nRun $(basename $0) --help for usage information."
+  exit 1
+fi
 
 cat << EOF
 
@@ -116,25 +153,53 @@ K8s Namespace:    $NAMESPACE
 K8s Token Secret: $TOKEN_SECRET
 APIM Key Source:  $TOKEN_KEY
 K8S Object:       ${K8S_OBJECT:-not provided}
+Login Method:     ${LOGIN_METHOD}
+Client ID:        ${SP_ID:-not provided}
+Client Secret:    ${MASKED_SP_SECRET:-not provided}
+Client Tenant:    ${TENANT:-not provided}
 
 ----------------------------------------
 
 EOF
 
-echo -n "Checking for Azure CLI access..."
-# See if we're logged in and can see the indicated subscription
-if [[ $(az account list --refresh --query "length([?id=='$SUBSCRIPTION_ID'])" 2>/dev/null) == 1 ]]; then
-	echo "done (already logged in)."
-else
-	# Try a managed identity login, if we're not already logged in
-	az login --identity >/dev/null
-	if [[ $(az account list --refresh --query "length([?id=='$SUBSCRIPTION_ID'])" 2>/dev/null) == 1 ]]; then 
-	  echo "done (logged in via identity)."
-	else
-	  echo -e "\n\nERROR: Failed to access the subscription via az cli, either via already logged in credentials or identity."
-	  exit 1
-	fi
-fi
+case "$LOGIN_METHOD" in
+  azurecli)
+    echo -n "Checking for Azure CLI access..."
+    # See if we're logged in and can see the indicated subscription
+    if [[ $(az account list --refresh --query "length([?id=='$SUBSCRIPTION_ID'])" 2>/dev/null) == 1 ]]; then
+    	echo "done (already logged in)."
+    else
+	    echo -e "\n\nERROR: Failed to access the subscription via az cli."
+  	  exit 1
+    fi;;
+  identity)
+    MY_AZURE_CONFIG_DIR=$(mktemp -d)
+    AZURE_CONFIG_DIR="${MY_AZURE_CONFIG_DIR}"
+    echo -n "Checking for managed identity access..."
+  	# Try a managed identity login
+  	az login --identity >/dev/null
+  	if [[ $(az account list --refresh --query "length([?id=='$SUBSCRIPTION_ID'])" 2>/dev/null) == 1 ]]; then 
+  	  echo "done (logged in via identity)."
+  	else
+  	  echo -e "\n\nERROR: Failed to access the subscription via az cli, either via already logged in credentials or identity."
+  	  exit 1
+  	fi;;
+  sp)
+    MY_AZURE_CONFIG_DIR=$(mktemp -d)
+    AZURE_CONFIG_DIR="${MY_AZURE_CONFIG_DIR}"
+    echo -n "Checking for service principal access..."
+  	# Try a service principal
+  	az login --service-principal -u "$SP_ID" -p "$SP_SECRET" --tenant $TENANT >/dev/null
+  	if [[ $(az account list --refresh --query "length([?id=='$SUBSCRIPTION_ID'])" 2>/dev/null) == 1 ]]; then 
+  	  echo "done (logged in via service principal)."
+  	else
+  	  echo -e "\n\nERROR: Failed to access the subscription via az cli, either via already logged in credentials or identity."
+  	  exit 1
+  	fi;;
+  *)
+    echo "Unknown login method \"${LOGIN_METHOD}\"."
+    exit 1;;
+esac
 
 echo -n "Validating APIM instance is present and correct..."
 APIM_RESOURCE_ID=$(az apim show --subscription $SUBSCRIPTION_ID --resource-group $RESOURCE_GROUP --name $APIM_INSTANCE --query "id" -o tsv 2>&1) || {
