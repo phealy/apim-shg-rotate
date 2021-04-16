@@ -22,9 +22,9 @@ function usage {
 	  -t|--token-secret <TOKEN_SECRET>
 	  -k|--token-key <TOKEN_KEY: last, rotate, primary, secondary>
 	  -o|--k8s-object <K8S_OBJECT>
-    -l|--login-method <LOGIN_METHOD: azurecli, identity, sp>
-    -c|--client-id <SP_ID>
-    -p|--client-secret <SP_SECRET>
+      -l|--login-method <LOGIN_METHOD: azurecli, identity, sp>
+      -c|--client-id <SP_ID>
+      -p|--client-secret <SP_SECRET>
 	  --debug
 
 	Generates a new token for an APIM self-hosted gateway, updates the Kubernetes secret, then performs a rolling restart.
@@ -61,22 +61,22 @@ function usage {
 	        The name of the Kubernetes object to restart after updating the secret, using kubectl rollout restart.
 	        Should be specified in the form "type/name", e.g. "deployment/apim-gateway" or "statefulset/apim-gateway"
 
-    -l, --login-method, LOGIN_METHOD
-          The login method to use:
-            "azurecli" - assumes azure CLI is present and already logged in
-            "identity" - log in using a managed identity on an Azure resource
-            "sp" - log in using a service principal and secret
+	  -l, --login-method, LOGIN_METHOD
+	        The login method to use:
+	          "azurecli" - assumes azure CLI is present and already logged in
+	          "identity" - log in using a managed identity on an Azure resource (default)
+	          "sp" - log in using a service principal and secret
 
-    --client-id, SP_ID
-          The client ID of the service principal to use, if the login method is "sp"
-
-    --client-secret, SP_SECRET
-          The client secret of the service principal to use, if the login method is "sp". This can be either a
-          secret or the path to a certificate.
-
-    --tenant, TENANT_ID
-          The tenant ID of the service principal to use, if the login method is "sp".
-
+	  --client-id, SP_ID
+	        The client ID of the service principal to use, if the login method is "sp"
+	  
+	  --client-secret, SP_SECRET
+	        The client secret of the service principal to use, if the login method is "sp". This can be either a
+	        secret or the path to a certificate.
+	  
+	  --tenant, TENANT_ID
+	        The tenant ID of the service principal to use, if the login method is "sp".
+	  
 	  --debug
 	        Enable debug logging (set -x)
 
@@ -185,6 +185,16 @@ case "$LOGIN_METHOD" in
   	  exit 1
   	fi;;
   sp)
+    for var in SP_ID SP_SECRET TENANT; do
+    	if [[ -z "${!var}" ]]; then
+        FAIL=1
+    	  echo -e "ERROR: When using service principal login type, ${var} must be defined!"
+    	fi
+    done
+    if [[ "${FAIL:-0}" == "1" ]]; then
+      echo -e "\nRun $(basename $0) --help for usage information."
+      exit 1
+    fi
     MY_AZURE_CONFIG_DIR=$(mktemp -d)
     AZURE_CONFIG_DIR="${MY_AZURE_CONFIG_DIR}"
     echo -n "Checking for service principal access..."
