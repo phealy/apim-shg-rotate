@@ -212,7 +212,7 @@ case "$LOGIN_METHOD" in
 esac
 
 echo -n "Validating APIM instance is present and correct..."
-APIM_RESOURCE_ID=$(az apim show --subscription $SUBSCRIPTION_ID --resource-group $RESOURCE_GROUP --name $APIM_INSTANCE --query "id" -o tsv 2>&1) || {
+APIM_RESOURCE_ID=$(az apim show --subscription $SUBSCRIPTION_ID --resource-group $RESOURCE_GROUP --name $APIM_INSTANCE --query "id" --only-show-errors -o tsv 2>&1) || {
 	echo -e "\n\nERROR: Unable to find $APIM_INSTANCE in resource group $RESOURCE_GROUP in subscription $SUBSCRIPTION_ID."
 	echo -e "\nCommand output:\n${APIM_RESOURCE_ID}"
 	exit 1
